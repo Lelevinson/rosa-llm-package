@@ -1,0 +1,6 @@
+# Native Linux Docker, or Docker Desktop with host networking explicitly enabled.
+# The callback listener stays bound to 127.0.0.1 in the shared host namespace.
+services:
+  rosa-llm:
+    network_mode: host
+    command: ["login", "--no-browser", "--port", "1455"]

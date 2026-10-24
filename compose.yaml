@@ -1,0 +1,17 @@
+services:
+  rosa-llm:
+    build: .
+    env_file: .env
+    environment:
+      # Use container paths, independent of a host-only ROSA_LLM_AUTH_DIR in .env.
+      ROSA_LLM_AUTH_DIR: /home/app/.config/rosa-llm
+      OLLAMA_BASE_URL: ${DOCKER_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+    volumes:
+      - auth:/home/app/.config/rosa-llm
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # No listening ports are published. Use the host-network override for login.
+    command: ["status", "--json"]
+
+volumes:
+  auth:

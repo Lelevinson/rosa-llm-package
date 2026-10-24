@@ -1,0 +1,46 @@
+# Local environments, caches and generated distributions.
+.venv*/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.tox/
+.nox/
+.cache/
+.coverage*
+htmlcov/
+dist/
+build/
+*.egg-info/
+*.log
+
+# Private configuration and credential material. Only the template is shared.
+.env*
+!.env.example
+config.env
+*.local.env
+credentials*.json
+token*.json
+host.json
+.auth/
+secrets.*
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+
+# Personal editor, cloud, agent and shell configuration.
+.vscode/
+.idea/
+.aws/
+.ssh/
+.config/
+.codex/
+.agents/
+.direnv/
+.DS_Store
