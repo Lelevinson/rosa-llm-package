@@ -1,4 +1,4 @@
-# Recording experiments with rosa-llm 0.2.0
+# Recording experiments with rosa-llm
 
 The package records provider requests. The experiment runner owns trial design,
 tool execution, safety, outcome verification and durable storage.

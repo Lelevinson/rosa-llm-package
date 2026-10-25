@@ -85,16 +85,14 @@ For a uv project that already installs ROSA and declares a Python range
 compatible with >=3.11, add the adapter with:
 
 ```bash
-uv add "rosa-llm[langchain] @ git+https://github.com/Lelevinson/rosa-llm-package.git@v0.2.0"
+uv add "rosa-llm[langchain]==0.1.0"
 ```
 
-This command requires the approved `v0.2.0` tag on the public GitHub repository.
-Public HTTPS reads do not require GitHub sign-in.
-uv records the resolved commit in the consumer lockfile. Pin the full commit SHA
-when an immutable source reference is required. A declared Python >=3.9 range
-still requires a separate compatible-range or conditional-marker decision.
+This command installs the exact PyPI version and records distribution hashes in
+the consumer lockfile. A declared Python >=3.9 range still requires a separate
+compatible-range or conditional-marker decision; see the [README](../README.md#install).
 `uv add --editable /path/to/rosa-llm-package --extra langchain` is an alternative
-for local development; it should not replace the shared Git dependency. These
+for local development; it should not replace the shared PyPI dependency. These
 commands change the consuming project only when explicitly run there.
 
 Set `LLM_PROVIDER=openai` in the calling project's `.env` to use the saved ChatGPT

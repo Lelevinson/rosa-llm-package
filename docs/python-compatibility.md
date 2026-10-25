@@ -3,6 +3,8 @@
 For the later standalone Git/publication preparation, see
 [pre-push review](publication-preparation.md). The results below retain their
 original validation scope.
+The current release numbering is explained in the [changelog](../CHANGELOG.md);
+the 0.1.0 renumbering preserves the runtime source tested below.
 
 2026-10-24; rosa-llm 0.2.0. The base package and optional LangChain adapter now
 require Python >=3.11. Verified versions are CPython 3.11.17 and 3.12.3 on

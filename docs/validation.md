@@ -1,7 +1,8 @@
 # Implementation and validation report
 
-Current 0.2.0 verification is in [hardening-report.md](hardening-report.md).
+Subsequent 0.2.0 verification is in [hardening-report.md](hardening-report.md).
 The dated results below describe earlier snapshots.
+The current release numbering is explained in the [changelog](../CHANGELOG.md).
 
 ## 2026-10-23 general adapter audit
 

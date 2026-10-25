@@ -6,7 +6,7 @@ on:
       release_tag:
         description: Existing release tag; its version must match pyproject.toml
         required: true
-        default: v0.2.0
+        default: v0.1.0
         type: string
       publish:
         description: Upload to PyPI after checks; leave false for a dry run
@@ -49,7 +49,7 @@ jobs:
           tag = os.environ["RELEASE_TAG"]
           project = tomllib.loads(Path("pyproject.toml").read_text())["project"]
           if not re.fullmatch(r"v[0-9][A-Za-z0-9._+-]*", tag):
-              raise SystemExit("Use an existing version tag, such as v0.2.0.")
+              raise SystemExit("Use an existing version tag, such as v0.1.0.")
           if project["name"] != "rosa-llm" or tag != "v" + project["version"]:
               raise SystemExit("Release tag and package name/version do not match.")
           commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()

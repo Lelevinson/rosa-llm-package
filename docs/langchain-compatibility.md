@@ -1,7 +1,8 @@
 # LangChain compatibility audit and validation
 
-For current 0.2.0 corrections, request recording and verification, see
+For subsequent hardening corrections, request recording and verification, see
 [hardening-report.md](hardening-report.md). This report retains its original audit evidence.
+The current release numbering is explained in the [changelog](../CHANGELOG.md).
 
 Date: 2026-10-23. Package: `rosa-llm` 0.1.0. Adapter:
 `rosa_llm.langchain.ChatRosaLLM`. This audit covers general infrastructure;

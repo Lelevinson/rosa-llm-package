@@ -1,6 +1,6 @@
 [project]
 name = "rosa-llm"
-version = "0.2.0"
+version = "0.1.0"
 description = "Standalone Ollama and ChatGPT OAuth clients with a shared Python API and CLI"
 readme = "README.md"
 license = "Apache-2.0"

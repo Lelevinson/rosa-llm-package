@@ -35,9 +35,9 @@ See [PyPI's setup instructions](https://docs.pypi.org/trusted-publishers/creatin
 ## Release procedure
 
 1. Use an existing version tag whose package name/version match `pyproject.toml`.
-   The first published release is `v0.2.0`, commit
-   `0b15070f57b9b34790f7fb4c1330a0b19bf69f98`. Do not move that tag. Future
-   releases need a new package version and corresponding tag.
+   The intended initial-release number is now `v0.1.0`. The original `v0.2.0`
+   upload and tag remain intact; see the release history below. Future releases
+   need a new package version and corresponding tag.
 2. In GitHub **Actions → Publish to PyPI → Run workflow**, select branch `main`,
    set `release_tag` to the intended release tag, and leave `publish` **false**.
 3. Inspect the completed run: Python 3.11/3.12 base and LangChain checks, wheel and
@@ -54,11 +54,22 @@ same source. Existing push/PR checks retain their normal source revision.
 Only the upload job receives `id-token: write`; no model credentials or live
 inference are needed for these automated checks.
 
-Building v0.2.0 uses the README stored in that tag. Later README edits on `main`
+Building a release uses the README stored in its tag. Later README edits on `main`
 will appear in a future release; they do not alter an existing release snapshot.
 PyPI files cannot be overwritten: a changed release needs a new version and tag.
 The workflow deliberately fails on an already-uploaded file rather than hiding it.
 
-Version 0.2.0 is available on [PyPI](https://pypi.org/project/rosa-llm/0.2.0/).
+## Release numbering
+
+The original published release was 0.2.0, from tag `v0.2.0` at commit
+`0b15070f57b9b34790f7fb4c1330a0b19bf69f98`. The owner subsequently selected 0.1.0
+as the initial-release number. This is a separate release with identical runtime
+source; it does not rename, delete or overwrite the original PyPI upload or Git tag.
+Historical reports keep their original version labels and evidence.
+
+Install 0.1.0 explicitly with `uv add "rosa-llm[langchain]==0.1.0"`.
+An unpinned install can still select 0.2.0 because it sorts higher. Subsequent
+releases intended for automatic upgrades should exceed 0.2.0.
+
 Git consumers can continue using the existing fixed commit and lockfile.
 Publishing does not modify their dependencies or configure their model credentials.

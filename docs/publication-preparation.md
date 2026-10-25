@@ -1,4 +1,8 @@
-**Public repository preparation — approval pending**
+**Historical public repository preparation — 2026-10-24**
+
+This records the pre-publication review, not the current repository status.
+Publication subsequently completed. See the [changelog](../CHANGELOG.md) and
+[publishing guide](publishing.md) for current release numbering and distribution.
 
 2026-10-24. This snapshot supersedes the earlier publication preparation and
 requires public repository visibility.

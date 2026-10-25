@@ -6,7 +6,7 @@ Use it as a standalone client or supply `ChatRosaLLM` to LangChain and ROSA.
 The package handles model communication; your application executes tools and
 owns its agent logic, experiment design, and outcome checks.
 
-**v0.2.0** · **Python ≥3.11** · **[Apache-2.0](LICENSE)**
+**v0.1.0** · **Python ≥3.11** · **[Apache-2.0](LICENSE)**
 
 [Install](#install) · [Provider setup](#provider-setup) · [Python API](#python-api) ·
 [LangChain and ROSA](#langchain-and-rosa) · [Docker](#docker) ·
@@ -26,20 +26,24 @@ owns its agent logic, experiment design, and outcome checks.
 For the base client:
 
 ```bash
-uv add "rosa-llm==0.2.0"
+uv add "rosa-llm==0.1.0"
 ```
 
 For LangChain or ROSA, use this dependency instead:
 
 ```bash
-uv add "rosa-llm[langchain]==0.2.0"
+uv add "rosa-llm[langchain]==0.1.0"
 ```
 
-These commands install the published [PyPI release](https://pypi.org/project/rosa-llm/0.2.0/).
-`uv add` updates the consuming project's dependencies and lockfile; `==0.2.0`
+These commands install the [PyPI release](https://pypi.org/project/rosa-llm/0.1.0/).
+`uv add` updates the consuming project's dependencies and lockfile; `==0.1.0`
 selects this exact version. No PyPI or GitHub sign-in is required to install it.
 If your project already declares this dependency, use its `uv sync --locked`;
 a separate package clone is unnecessary.
+
+Version 0.1.0 renumbers the initial release with the same runtime code previously
+published as 0.2.0. That earlier upload remains available. Use the explicit pin
+above: an unpinned install can select 0.2.0 because it sorts higher.
 
 > **Python compatibility:** the base package and adapter require ≥3.11 and have
 > been tested on 3.11 and 3.12 under Linux/WSL x86_64. This checkout and Docker use 3.12.
@@ -49,15 +53,14 @@ a separate package clone is unnecessary.
 <details>
 <summary>Pinning a research dependency or keeping a Python ≥3.9 project</summary>
 
-The published v0.2.0 commit is `0b15070f57b9b34790f7fb4c1330a0b19bf69f98`.
-To install directly from Git instead of PyPI, pin this source commit:
+To install directly from Git instead of PyPI, use the release tag:
 
 ```bash
-uv add "rosa-llm[langchain] @ git+https://github.com/Lelevinson/rosa-llm-package.git@0b15070f57b9b34790f7fb4c1330a0b19bf69f98"
+uv add "rosa-llm[langchain] @ git+https://github.com/Lelevinson/rosa-llm-package.git@v0.1.0"
 ```
 
-The existing `v0.2.0` tag points to the same source. A tag installation records its
-resolved commit in `uv.lock`; the full SHA makes the source reference immutable.
+A tag installation records its resolved commit in `uv.lock`. Use the full commit
+SHA instead of the tag in the Git URL when an immutable source reference is required.
 
 uv checks the consumer's declared Python range, not just its active interpreter.
 For a project that retains ≥3.9 support, a conditional dependency can omit this
@@ -65,7 +68,7 @@ adapter on Python 3.9/3.10:
 
 ```bash
 uv add --marker "python_version >= '3.11'" \
-  "rosa-llm[langchain] @ git+https://github.com/Lelevinson/rosa-llm-package.git@0b15070f57b9b34790f7fb4c1330a0b19bf69f98"
+  "rosa-llm[langchain]==0.1.0"
 ```
 
 `--marker` makes the dependency conditional. Older interpreters will not receive
@@ -265,7 +268,7 @@ tool permissions, observations, experimental conditions, and outcome validation.
 Unsupported options fail explicitly. Do not assume temperature/seed controls,
 strict schemas, hosted tools, images/files, or arbitrary OpenAI parameters are
 portable across providers. There are no constructor-level decoding defaults on
-`ChatRosaLLM` in v0.2.0; supplying per-call options and retaining them through an
+`ChatRosaLLM` in v0.1.0; supplying per-call options and retaining them through an
 agent's tool-binding step is the caller's responsibility.
 
 See [integration examples](docs/langchain-integration.md),
