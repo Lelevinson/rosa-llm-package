@@ -1,0 +1,112 @@
+name: Publish to PyPI
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing release tag; its version must match pyproject.toml
+        required: true
+        default: v0.2.0
+        type: string
+      publish:
+        description: Upload to PyPI after checks; leave false for a dry run
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pypi-${{ inputs.release_tag }}
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      commit: ${{ steps.release.outputs.commit }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: refs/tags/${{ inputs.release_tag }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify release identity
+        id: release
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          import re
+          import subprocess
+          import tomllib
+
+          tag = os.environ["RELEASE_TAG"]
+          project = tomllib.loads(Path("pyproject.toml").read_text())["project"]
+          if not re.fullmatch(r"v[0-9][A-Za-z0-9._+-]*", tag):
+              raise SystemExit("Use an existing version tag, such as v0.2.0.")
+          if project["name"] != "rosa-llm" or tag != "v" + project["version"]:
+              raise SystemExit("Release tag and package name/version do not match.")
+          commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a") as output:
+              output.write(f"commit={commit}\nversion={project['version']}\n")
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
+              summary.write(f"Release: {tag}\n\nSource commit: `{commit}`\n")
+          PY
+
+  checks:
+    needs: resolve
+    uses: ./.github/workflows/tests.yml
+    with:
+      ref: ${{ needs.resolve.outputs.commit }}
+
+  build:
+    needs: [resolve, checks]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.resolve.outputs.commit }}
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
+        with:
+          version: "0.13.2"
+      - name: Build release distributions
+        run: uv build --no-sources
+      - name: Validate package metadata and README
+        run: uvx --from twine==6.2.0 twine check --strict dist/*
+      - name: Record distribution hashes
+        run: sha256sum dist/* >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-distributions
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    if: inputs.publish
+    needs: [resolve, checks, build]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/rosa-llm/
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-distributions
+          path: dist
+      - name: Publish through PyPI Trusted Publishing
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # release/v1
+        with:
+          packages-dir: dist/

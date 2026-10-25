@@ -411,6 +411,7 @@ see the [integration guide](docs/langchain-integration.md).
 | [Experiment recording](docs/experiment-recording.md) | Native records, timing definitions, provenance, runner responsibilities |
 | [Python support](docs/python-compatibility.md) | Tested versions, wheel checks, dependency-resolution boundaries |
 | [Protocol](docs/protocol.md) | Official OAuth/protocol sources |
+| [Publishing](docs/publishing.md) | Maintainer setup, dry runs, and PyPI Trusted Publishing |
 | [Hardening](docs/hardening-report.md) / [validation](docs/validation.md) | Dated evidence and remaining manual checks |
 
 <details>
