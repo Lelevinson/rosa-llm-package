@@ -1,332 +1,430 @@
 # rosa-llm
 
-Licensed under [Apache-2.0](LICENSE).
+**OpenAI through ChatGPT OAuth and local Ollama, behind one Python interface.**
 
-Version 0.2.0 hardens history replay, diagnostics and request provenance. See the
-[hardening results](docs/hardening-report.md) and the
-[experiment recording contract](docs/experiment-recording.md) for the current
-interfaces, corrected behaviors and remaining provider/environment limits.
+Use it as a standalone client or supply `ChatRosaLLM` to LangChain and ROSA.
+The package handles model communication; your application executes tools and
+owns its agent logic, experiment design, and outcome checks.
 
-A standalone Python 3.11+ package for Ollama and official Sign in with ChatGPT
-OAuth. No ROS, ROSA, LangChain, database, API key, or agent runtime is required.
-ChatGPT-plan inference requires an eligible account and an explicit permission
-grant; a successful identity login alone is insufficient.
+**v0.2.0** · **Python ≥3.11** · **[Apache-2.0](LICENSE)**
 
-An optional [LangChain adapter and ROSA integration guide](docs/langchain-integration.md)
-is available. The [general compatibility report](docs/langchain-compatibility.md)
-covers supported custom tools, provider differences, test evidence and limits.
-ROSA 1.0.10 has also been tested without modifying its source.
+[Install](#install) · [Provider setup](#provider-setup) · [Python API](#python-api) ·
+[LangChain and ROSA](#langchain-and-rosa) · [Docker](#docker) ·
+[Configuration](#configuration) · [Troubleshooting](#troubleshooting)
 
-The base client and optional LangChain adapter support Python 3.11 and 3.12.
-The checkout keeps `.python-version` at 3.12 for ROS 2 Jazzy; the Docker image
-also stays on 3.12. Standalone installations can use Python 3.11. See the
-[Python compatibility and verification report](docs/python-compatibility.md)
-for the supported scope and the separate ROSA Research dependency-resolution boundary.
+| Use case | What you need |
+| --- | --- |
+| Standalone client | Python and a configured provider; ROS and LangChain are optional |
+| OpenAI | Your own ChatGPT account with eligible model access and plan-use permission; no OpenAI API key |
+| Ollama | A reachable server and an already installed model |
+| LangChain / ROSA | The `langchain` extra and your existing agent/ROS environment |
 
-## Install in WSL Ubuntu
+## Install
 
-With Python 3.12 and [uv](https://docs.astral.sh/uv/getting-started/installation/)
-available, open a WSL terminal. The intended GitHub repository is public;
-HTTPS cloning does not require GitHub sign-in once publication is approved:
+### In an existing uv project
+
+For the base client:
+
+```bash
+uv add "rosa-llm @ git+https://github.com/Lelevinson/rosa-llm-package.git@v0.2.0"
+```
+
+For LangChain or ROSA, use this dependency instead:
+
+```bash
+uv add "rosa-llm[langchain] @ git+https://github.com/Lelevinson/rosa-llm-package.git@v0.2.0"
+```
+
+`uv add` updates the consuming project's dependencies and lockfile. Public HTTPS
+installation needs no GitHub sign-in. If your project already declares this
+dependency, use its `uv sync --locked`; a separate package clone is unnecessary.
+
+> **Python compatibility:** the base package and adapter require ≥3.11 and have
+> been tested on 3.11 and 3.12 under Linux/WSL x86_64. This checkout and Docker use 3.12.
+> Use Python 3.12 for the installed ROS 2 Jazzy bindings; the package does not
+> install ROS. See [verified versions and limits](docs/python-compatibility.md).
+
+<details>
+<summary>Pinning a research dependency or keeping a Python ≥3.9 project</summary>
+
+The published v0.2.0 commit is `0b15070f57b9b34790f7fb4c1330a0b19bf69f98`.
+A tag installation records its resolved commit in `uv.lock`; use the full SHA
+in the Git URL when an immutable source reference is required.
+
+uv checks the consumer's declared Python range, not just its active interpreter.
+For a project that retains ≥3.9 support, a conditional dependency can omit this
+adapter on Python 3.9/3.10:
+
+```bash
+uv add --marker "python_version >= '3.11'" \
+  "rosa-llm[langchain] @ git+https://github.com/Lelevinson/rosa-llm-package.git@0b15070f57b9b34790f7fb4c1330a0b19bf69f98"
+```
+
+`--marker` makes the dependency conditional. Older interpreters will not receive
+the adapter. Existing ROS bindings and dependency groups may require a newer
+Python version independently. Lowering this package's minimum alone does not
+resolve every consumer's compatibility constraints.
+
+</details>
+
+### Run the CLI from a checkout
+
+With Git, Python 3.12, and [uv](https://docs.astral.sh/uv/getting-started/installation/)
+available, run in your Linux or WSL terminal:
 
 ```bash
 git clone https://github.com/Lelevinson/rosa-llm-package.git
 cd rosa-llm-package
 uv sync --locked
 uv run rosa-llm init
-uv run rosa-llm status --json
 ```
 
-`uv sync` installs this project and its locked dependencies into `.venv`;
-`--locked` refuses to change `uv.lock`. `uv run` runs the following command in
-that environment. `init` creates `.env` and refuses to overwrite existing settings.
-`git clone` downloads the repository into a new local directory; `cd` enters
-that directory. For an existing checkout, start with `cd` and skip cloning.
-No global Python installation is modified. Public repository reads and model
-access are separate: each user supplies their own ChatGPT OAuth session or a
-reachable Ollama server. GitHub authentication is needed for repository writes.
-Never put a GitHub token in a Git URL, `.env`, `pyproject.toml` or `uv.lock`.
+`git clone` downloads the project; `cd` enters it. `uv sync --locked` installs the
+locked environment in `.venv`; `uv run` executes a command there. `init` creates
+`.env` and refuses to overwrite it. Skip `init` if you already have configuration.
+See [uv's sync behavior](https://docs.astral.sh/uv/concepts/projects/sync/).
 
-## Configure and switch providers
+## Provider setup
 
-Edit `.env` in the directory from which you run the program:
+Choose a provider below. `YOUR_OLLAMA_MODEL` and `YOUR_OPENAI_MODEL` are
+placeholders: replace them with names returned by the relevant catalog command.
+
+### Ollama
+
+**1. Configure the server address** in your local `.env`:
 
 ```dotenv
 LLM_PROVIDER=ollama
-OLLAMA_MODEL=qwen3:8b
 OLLAMA_BASE_URL=http://localhost:11434
-OPENAI_MODEL=
-ROSA_LLM_AUTH_DIR=
-ROSA_LLM_PROFILE=default
-ROSA_LLM_TIMEOUT=120
 ```
 
-For Ollama, the endpoint must already be reachable and the selected model must
-already be installed. Use your actual model name from `rosa-llm models`.
-For OpenAI, set `LLM_PROVIDER=openai`, then log in as described below.
-Empty `OPENAI_MODEL` selects the first visible model in the account's ordered
-catalog on each request. An explicit name must occur in that catalog.
+In WSL, a Windows-hosted server may need the Windows host address instead.
+Use the address reachable from your own machine; the client does not switch
+endpoints, start servers, or download models.
 
-Precedence, highest first: process environment, local `.env`, per-user
-`$XDG_CONFIG_HOME/rosa-llm/config.env` (normally `~/.config/rosa-llm/config.env`),
-then defaults. `uv run rosa-llm init --user` creates the per-user file.
-The loader does not modify process environment or expand `${...}` in dotenv values.
-An empty `ROSA_LLM_AUTH_DIR` uses the default user directory. Tokens never go in `.env`.
-
-## Sign in with ChatGPT
+**2. Discover a model and make a request:**
 
 ```bash
-uv run rosa-llm login
+uv run rosa-llm models --provider ollama --json
+uv run rosa-llm ask "Say hello" --provider ollama --model YOUR_OLLAMA_MODEL --json
+```
+
+Save that model as `OLLAMA_MODEL` in `.env` to avoid repeating `--model`.
+Tool use requires a tool-capable model.
+
+### OpenAI — Sign in with ChatGPT
+
+**1. Authorize your own account:**
+
+```bash
+uv run rosa-llm login --provider openai
 uv run rosa-llm status --provider openai --json
-uv run rosa-llm models --provider openai --json
-uv run rosa-llm ask "Explain ROS 2 in one sentence." --provider openai --json
 ```
 
-`--provider` overrides the configured provider for that command. Login always
-authenticates OpenAI, even while `.env` selects Ollama. Every team member signs
-in using their own account; the program never requests a ChatGPT password.
-It opens the system browser and listens only at `127.0.0.1:1455/auth/callback`.
-`--port 0` selects a free loopback port. Each attempt uses the exact callback
-URI in both authorization and code exchange.
+Login opens a browser and listens on `127.0.0.1:1455/auth/callback`.
+Identity login and plan-use permission are separate; inference needs both.
+`status` reads local state and does not confirm current remote access.
 
-In WSL, the browser can run on Windows. If the browser does not open:
+**2. Discover a model, then request it explicitly:**
 
 ```bash
-uv run rosa-llm login --no-browser
+ROSA_LLM_REQUIRE_EXPLICIT_MODEL=false uv run rosa-llm models --provider openai --json
+uv run rosa-llm ask "Say hello" --provider openai --model YOUR_OPENAI_MODEL --json
 ```
 
-Open the printed authorization URL in your Windows browser while the command
-remains running. `--no-browser` disables browser launching. Keep the URL private;
-printed URLs omit retained identity-token hints. WSL localhost forwarding must
-reach the listener in Ubuntu. This is an environment requirement, not guaranteed
-by the Python package. Do not change the callback host to `localhost`, paste a
-callback URL into chat, or expose the listener publicly.
+The assignment before `models` disables the explicit-model guard for that command
+only, allowing discovery before a model is configured. It does not change `.env`.
+`--provider` and `--model` override configuration for one command.
 
-If forwarding fails, use an approved local SSH tunnel: on the browser's host,
-run `ssh -N -L 1455:127.0.0.1:1455 user@your-wsl-or-linux-host`, then run login
-on that Linux host with `--no-browser --port 1455`. `ssh -N` runs only forwarding;
-`-L` maps the browser host's local port to the remote loopback listener. This
-requires your existing SSH access; the package does not install or configure SSH.
+**3. Save your selection** in `.env`:
 
-Use `--profile lab` on login and subsequent commands to keep another registration
-separate, or set `ROSA_LLM_PROFILE=lab`. Labels use letters, digits, `_`, and `-`.
-To add a different account/workspace, choose a new label. Returning logins reuse
-that profile's client ID and verify its subject. `status` shows the active label
-without tokens and does not contact OpenAI or assert current remote eligibility.
-
-If identity login succeeds without plan permission, a new identity registration
-is retained with inference disabled. A failed login never replaces an existing
-valid session. To explicitly ask for permission again:
-
-```bash
-uv run rosa-llm login --consent
-uv run rosa-llm logout --json
+```dotenv
+LLM_PROVIDER=openai
+OPENAI_MODEL=YOUR_OPENAI_MODEL
+ROSA_LLM_REQUIRE_EXPLICIT_MODEL=true
 ```
 
-`--consent` requests the consent screen again; ordinary returning logins do not.
-`logout` attempts remote revocation, clears the selected profile's tokens, and
-retains its registration and host identity. If remote revocation cannot be
-confirmed, it reports that fact; disconnect the app in ChatGPT Settings.
+Credentials are saved outside the repository. Each teammate signs in separately;
+GitHub access does not provide model access. An OpenAI API key is not used here.
 
-## CLI and live smoke checks
+<details>
+<summary>Browser forwarding, profiles, consent, and logout</summary>
 
-```bash
-uv run rosa-llm models --json
-uv run rosa-llm ask "Say hello" --json
-uv run rosa-llm ask "Explain a ROS 2 node briefly" --stream
-uv run rosa-llm test --json
-uv run rosa-llm test --tool --json
-```
+- **No browser window?** Run `uv run rosa-llm login --no-browser` and open the
+  printed authorization URL on the browser host while login remains running.
+  Keep the URL private; do not paste callback URLs into chat.
+- **WSL:** Windows-to-WSL localhost forwarding must reach the listener. Keep the
+  callback host as `127.0.0.1`; do not replace it with `localhost` or expose it
+  publicly. `--port 0` selects a free loopback port.
+- **Existing SSH access:** on the browser host, run
+  `ssh -N -L 1455:127.0.0.1:1455 user@your-linux-host`, then run login on that
+  Linux host with `--no-browser --port 1455`. `-N` runs only forwarding; `-L`
+  forwards the local port to the remote loopback listener. SSH setup is external.
+- **Separate accounts/workspaces:** use `--profile lab` on login and subsequent
+  commands, or set `ROSA_LLM_PROFILE=lab`. Labels accept letters, digits, `_`,
+  and `-`. Returning logins reuse the registration and verify its subject.
+- **Missing plan permission:** `uv run rosa-llm login --consent` requests consent
+  again. A new identity-only registration retains inference-disabled state;
+  failed login does not replace an existing valid session.
+- **Sign out:** `uv run rosa-llm logout --json` attempts remote revocation and
+  clears the selected profile's tokens, retaining its registration and host ID.
+  If revocation cannot be confirmed, disconnect the app in ChatGPT Settings.
 
-`models` lists available models. `ask` performs real inference. `--json` emits
-one JSON document on stdout, with provider, model, response, requested tools,
-usage and available metadata. Diagnostics go to stderr; failures exit with code 1
-and emit an `error` object. No inference command opens OAuth or prompts for input.
-`--stream` prints text as it arrives and cannot be combined with `--json`.
-Partial streamed text is not proof of completion: check the process exit code.
+</details>
 
-`test` makes one real request and checks an exact short marker. `--tool` instead
-allows one harmless echo call and one follow-up request, validates the requested
-name and arguments, and checks the final marker. Models that decline the call
-fail the smoke check. Neither command downloads models or starts an agent.
-`--model NAME` overrides the selected provider's model for one command.
-`--env-file PATH` selects another local dotenv file. Options follow the command.
-Use `uv run rosa-llm ask --help` for command syntax.
+## Python API
 
-## Python API and another project
+The base API needs no ROS, LangChain, database, or agent runtime:
 
 ```python
-from rosa_llm import Message, Tool, create_client
+from rosa_llm import create_client
 
 with create_client() as client:
-    response = client.generate("Explain what ROS 2 is.")
+    response = client.generate("Explain a ROS 2 node briefly.")
     print(response.text)
-    print(response.tool_calls, response.model, response.usage)
-
-    history = [Message("user", "What is a node?")]
-    first = client.generate(history)
-    history += [first.message, Message("user", "Give one example.")]
-    print(client.generate(history).text)
+    print(response.model, response.usage)
 ```
 
-History is explicit; the client does not mutate it or retain a hidden session.
-Keep `response.message` so provider-specific reasoning and tool-call data survive
-the next request. Plain user/assistant text can be shared across providers;
-opaque provider output cannot. System instructions map to developer messages on
-the OpenAI OAuth route. Ollama supports system messages and rejects developer messages.
+`create_client()` loads configuration from the calling directory. For explicit
+settings, pass `Config(...)`, or use `create_client(env_file="path/to/.env")`.
+Keep client use inside `with` so its HTTP resources close afterward.
 
-`client.stream(prompt)` yields `StreamEvent` objects: `text` contains deltas;
-`completed` contains the final normalized `response`. Consume through completion
-and handle `LLMError` exceptions. A completed empty response without tools is rejected.
-Only the final response has complete tool calls; partial arguments are not executed.
+| Interface | Contract |
+| --- | --- |
+| `client.generate(prompt)` | Returns a validated completed `Response`; partial output is not returned as success |
+| `client.generate(messages)` | Uses explicit history; retain `response.message` to preserve native reasoning and tool-call items |
+| `client.stream(prompt)` | Yields text events and a final completed response; exhaust or close the iterator and handle `LLMError` |
+| `Tool(...)` / `response.tool_calls` | Declares tools and receives requests; your code validates arguments and executes them |
+| `create_client(observer=callback)` | Captures request records; the application owns thread-safe, durable storage and task scoring |
 
-`Tool(name, description, parameters)` declares a JSON function. OpenAI wraps it
-in a namespace (default `local`); `Tool(..., kind="custom", format={"type":"text"})`
-declares a custom text tool. Ollama rejects custom tools and explicit namespaces.
-The caller must validate and execute requested tools, then append a `Message`
-with role `tool`, `tool_call_id`, and `tool_name`; custom outputs also set
-`tool_kind="custom"`. See [examples/tool_call.py](examples/tool_call.py) and
-[examples/chat.py](examples/chat.py). Run examples with `uv run python examples/chat.py`.
+Plain text history is portable across providers; opaque provider history is not.
+OpenAI maps system instructions to developer messages. Ollama accepts system
+messages and rejects developer messages. Tool arguments are complete only after
+provider completion; do not execute partial streamed arguments.
 
-From another uv project whose declared Python range is compatible with >=3.11:
+Recipes: [chat/history](examples/chat.py) · [native tool loop](examples/tool_call.py) ·
+[request recording and timing](docs/experiment-recording.md).
 
-```bash
-uv add "rosa-llm @ git+https://github.com/Lelevinson/rosa-llm-package.git@v0.2.0"
-# Include the optional LangChain adapter when needed:
-uv add "rosa-llm[langchain] @ git+https://github.com/Lelevinson/rosa-llm-package.git@v0.2.0"
+## LangChain and ROSA
+
+Install with `[langchain]` as shown above. In this checkout, enable the extra with
+`uv sync --locked --extra langchain`; it pins `langchain-core==0.3.86`.
+
+```python
+from rosa_llm import create_client
+from rosa_llm.langchain import ChatRosaLLM
+
+with create_client() as client:
+    model = ChatRosaLLM(client=client)
+    print(model.invoke("Say hello").content)
 ```
 
-`uv add` records the package as a dependency of the current project. uv checks
-that project's declared Python range as well as the selected interpreter. A
-consumer declaring >=3.9 still needs a compatible range or dependency marker;
-this package change does not perform that consumer-side integration. Its local
-`.env` is read from the calling directory. Alternatively pass `Config(...)` to
-`create_client(config)` or pass `env_file="/path/to/.env"`.
-These Git installation commands require the approved `v0.2.0` tag to exist on
-GitHub. `@v0.2.0` selects that version reference; uv records its resolved commit
-in the consumer lockfile. A consumer can instead pin the full commit SHA for an
-immutable source reference. `uv add --editable /path/to/rosa-llm-package` remains
-available for local package development, but shared research dependencies should
-use the Git reference. Public HTTPS installation does not require a GitHub
-token. Model credentials remain local to each user and are never shared.
+Use ordinary LangChain tools through `model.bind_tools(...)` or an agent's normal
+model interface. LangChain/your application executes tools; this adapter does not.
+Keep the client open until all agent calls finish.
+
+<details>
+<summary>Pass the same adapter to an existing ROSA application</summary>
+
+Install ROSA separately and source your ROS environment first. The package's
+Docker image does not supply ROS. With those dependencies available:
+
+```python
+from rosa import ROSA
+from rosa_llm import create_client
+from rosa_llm.langchain import ChatRosaLLM
+
+with create_client() as client:
+    model = ChatRosaLLM(client=client)
+    agent = ROSA(ros_version=2, llm=model, streaming=False)
+    print(agent.invoke("List the current ROS 2 nodes."))
+```
+
+The model adapter is infrastructure. Your research code still owns policies,
+tool permissions, observations, experimental conditions, and outcome validation.
+
+</details>
+
+| Capability | OpenAI ChatGPT OAuth | Ollama |
+| --- | --- | --- |
+| Text/history and streamed text | Supported | Supported |
+| JSON function tools | Supported; native API wraps tools in namespaces | Supported; JSON-object arguments |
+| Custom text tools | Native API only | Unsupported |
+| LangChain tools | Text/function-tool contract | Text/function-tool contract |
+| Per-call options | `tool_choice` (`auto`, `none`, `required`), `parallel_tool_calls` | `options`, `think`, `format`, `keep_alive` |
+| Async | LangChain worker-thread interface; base client uses synchronous HTTP | Same |
+
+Unsupported options fail explicitly. Do not assume temperature/seed controls,
+strict schemas, hosted tools, images/files, or arbitrary OpenAI parameters are
+portable across providers. There are no constructor-level decoding defaults on
+`ChatRosaLLM` in v0.2.0; supplying per-call options and retaining them through an
+agent's tool-binding step is the caller's responsibility.
+
+See [integration examples](docs/langchain-integration.md),
+[custom LangChain tools](examples/langchain_tools.py), and the
+[compatibility report](docs/langchain-compatibility.md) for exact supported scope.
 
 ## Docker
 
-The image uses Python 3.12, uv, and a non-root user (UID 10001). A private named
-volume holds credentials and host identity across disposable CLI containers.
-Create `.env` using the WSL commands above, or copy `.env.example` to `.env`
-(`cp` copies a file). For a Docker-only installation, copying needs no Python.
+**Status:** Dockerfiles/Compose configuration are provided. Image build, runtime,
+and credential persistence have not been live-verified in this environment.
+See [verification limits](docs/hardening-report.md).
+
+The image is a standalone Python 3.12 client, not a complete ROS/Jazzy environment.
+For an existing ROS container, install the Git dependency into that application's
+environment. This image defaults to the base client; build with
+`--build-arg INSTALL_LANGCHAIN=true` to include the optional adapter.
+
+Create a local `.env` from `.env.example` if one does not already exist, then:
 
 ```bash
 docker compose build
-docker compose run --rm rosa-llm status --json
-docker compose run --rm rosa-llm ask "Say hello" --json
+docker compose run --rm rosa-llm models --provider ollama --json
+docker compose run --rm rosa-llm ask "Say hello" --provider ollama --model YOUR_OLLAMA_MODEL --json
 ```
 
-`docker compose build` builds the image; `run --rm` runs one command and removes
-its container afterward, preserving the named volume. Compose loads `.env`.
-`DOCKER_OLLAMA_BASE_URL` overrides its Docker endpoint; the default is
-`http://host.docker.internal:11434`. On native Linux this name maps to the host
-gateway. The Ollama server must be reachable on that interface; a server listening
-only on host loopback may need host networking instead. The package does not
-change Ollama bindings, firewalls, or Docker settings.
+`build` creates the image. `run --rm` removes the command container when it exits;
+the named credential volume persists. Compose loads `.env`.
 
-For login on **native Linux Docker**, share the host network so the host browser
-can reach the container's loopback listener:
+| Setting | Container behavior |
+| --- | --- |
+| Ollama endpoint | `DOCKER_OLLAMA_BASE_URL`, default `http://host.docker.internal:11434`; server must listen on a reachable interface |
+| Credential directory | `/home/app/.config/rosa-llm`, persisted in the `auth` named volume |
+| Runtime user | Non-root UID 10001; bind-mounted credential directories must be owned by that UID and mode 700 |
+
+### OAuth login in Docker
+
+On native Linux, or Docker Desktop with [host networking enabled](https://docs.docker.com/engine/network/drivers/host/):
 
 ```bash
 docker compose -f compose.yaml -f compose.login.yaml run --rm rosa-llm login --no-browser
-docker compose run --rm rosa-llm status --provider openai --json
-docker compose run --rm rosa-llm test --provider openai --json
+docker compose run --rm -e ROSA_LLM_REQUIRE_EXPLICIT_MODEL=false rosa-llm models --provider openai --json
+docker compose run --rm rosa-llm ask "Say hello" --provider openai --model YOUR_OPENAI_MODEL --json
 ```
 
-`-f` selects Compose files; later files override earlier ones. Open the printed
-authorization URL in the browser on that host. No callback port is publicly
-published, and the listener remains on loopback. Do not run simultaneous logins
-on the same port. Use `--port` to choose another port if needed.
+`-f` selects Compose files; the later file overrides the earlier one. `-e` sets
+an environment variable inside that command's container. Open the printed URL in the browser on that host while login waits. The listener remains
+on loopback. Bridge networking and publishing a port do not make a listener bound
+to the container's `127.0.0.1` reachable from the host. The project does not enable
+host networking or change host firewalls/Ollama bindings for you.
 
-Docker Desktop host networking requires its supported host-network feature to
-be explicitly enabled; this project does not enable it. If unavailable, perform
-initial login using the native WSL package, then transfer **your own** credential
-directory into your private volume using your organization's secure file-transfer
-process, preserving owner-only permissions and container UID 10001. Move the host
-identity with its runtime; do not operate concurrent copies as independent hosts.
-Alternatively use a Linux Docker host and an existing SSH tunnel as above.
-Bridge networking alone with a listener bound to container `127.0.0.1` does not
-make host loopback callbacks work; publishing a port does not fix that bind.
+If host networking is unavailable, use an existing SSH tunnel, or complete WSL
+login and securely move **your own** credential/host-identity directory into your
+private volume with the correct ownership. Move the runtime identity together;
+do not operate concurrent independent copies. Never share credential volumes
+between teammates. Use the same Compose project/volume across commands, and avoid
+`docker compose down -v` unless credential deletion is intentional (`-v` deletes
+named volumes). Native Windows Python is outside this release's tested scope.
 
-All commands for one installation must use the same Compose project and volume.
-Do not share a credential volume between team members. Do not use
-`docker compose down -v` unless you intend to delete those credentials (`-v`
-removes named volumes). Bind mounts must be pre-owned by UID 10001 and mode 700.
-Native Windows Python is outside this release's scope; use WSL or Linux containers.
+## Configuration
 
-## Architecture, dependencies, and credential storage
+Edit the `.env` in the directory from which your application runs. No tokens or
+API keys belong in this file.
 
-```text
-src/rosa_llm/
-  config.py       .env / per-user / process configuration
-  types.py        Message, Tool, ToolCall, Response, StreamEvent
-  client.py       create_client(), shared API, safe connection errors
-  langchain.py    optional ChatRosaLLM adapter for LangChain/ROSA
-  providers.py    Ollama NDJSON and OpenAI Responses SSE adapters
-  auth.py         OAuth, loopback callback, JWT validation, renewal/revocation
-  storage.py      owner-only atomic files and Linux process locking
-  http.py         safe HTTP error classification
-  errors.py       public exception types
-  cli.py          developer commands and smoke checks
-```
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `LLM_PROVIDER` | `ollama` | `ollama` or `openai` |
+| `OLLAMA_MODEL` | `qwen3:8b` | Installed model name |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Endpoint reachable from this process |
+| `OPENAI_MODEL` | Empty | Account-visible model name; empty otherwise selects the first visible catalog entry on each request |
+| `ROSA_LLM_REQUIRE_EXPLICIT_MODEL` | `false` | Set `true` for controlled OpenAI runs to reject missing model selection |
+| `ROSA_LLM_PROFILE` | `default` | Saved OAuth registration label |
+| `ROSA_LLM_AUTH_DIR` | User configuration directory | Credential/host storage outside the repository; empty uses the default |
+| `ROSA_LLM_TIMEOUT` | `120` | HTTP phase timeout in seconds, not a total trial deadline |
 
-Runtime dependencies are `httpx` for HTTP and streaming, `python-dotenv` for
-configuration, and `PyJWT[crypto]` for RSA signature and claim validation.
-`pytest` and `ruff` are development dependencies for tests and formatting/linting;
-`uv_build` builds the installable package. The lock file includes transitive dependencies.
+**Precedence, highest first:** process environment → local `.env` → user
+`config.env` → defaults. The user directory is `$XDG_CONFIG_HOME/rosa-llm`, normally
+`~/.config/rosa-llm`. `uv run rosa-llm init --user` creates its `config.env`.
+The loader does not change process environment or expand `${...}` in dotenv values.
+For reproducible runs, select a named model rather than relying on catalog order.
 
-By default, `~/.config/rosa-llm/credentials.json` maps profile labels to separate
-registrations and `host.json` persists a random host ID. `ROSA_LLM_AUTH_DIR`
-overrides this location, which must be outside the project. Directories use mode
-700; credential, host, temporary, and lock files use mode 600. Credential files
-are plaintext protected by OS permissions, not encrypted at rest. Each successful
-refresh atomically replaces the access token, rotating refresh token, scopes, and
-expiry while holding a Linux process lock. A second process re-reads the new
-record after obtaining the lock. Local filesystems are required; distributed/NFS
-locking and multi-host credential sharing are outside scope.
+## CLI reference
 
-Tokens are renewed near expiry. Revoked sessions require human login; temporary
-network failures preserve credentials. No inference retries or provider fallbacks
-are hidden in the client. HTTP redirects and environment proxy variables are
-disabled on internally created HTTP clients; TLS verification remains enabled.
-Do not enable HTTP wire/debug logging around OAuth because it can expose secrets.
+All options follow the subcommand; for example, `uv run rosa-llm ask --help`.
 
-## Automated checks and troubleshooting
+| Command | What it does |
+| --- | --- |
+| `init` | Creates configuration without overwriting an existing file |
+| `login` / `logout` | Signs in / clears the selected profile's tokens, attempting remote revocation |
+| `status --json` | Reads local authentication state; does not contact OpenAI |
+| `models --json` | Queries the selected provider's model catalog |
+| `ask "prompt" --json` | Performs real inference; JSON includes provider/model, text, tool calls, usage, and available metadata |
+| `ask "prompt" --stream` | Prints text deltas; incompatible with `--json` |
+| `test --json` | Makes one real request and checks an exact short marker |
+| `test --tool --json` | Checks one harmless echo tool round trip, arguments, and final marker; at most two model requests |
+
+Common overrides: `--provider`, `--model`, `--profile`, `--env-file PATH`.
+Diagnostics go to stderr. JSON-mode failures emit an `error` object and exit 1.
+Inference never opens a login prompt or automatically retries/falls back.
+Partial streaming output is not proof of success; check the exit status.
+
+## Credentials and transport
+
+- Default storage: `~/.config/rosa-llm/credentials.json` and `host.json`.
+  Profiles belong to this package; it does not reuse Codex credentials.
+  Files are plaintext protected by OS permissions, not encrypted.
+- Storage directories use mode 700; credential, host, temporary, and lock files
+  use mode 600. Refreshes atomically rotate tokens under a Linux process lock.
+  Local filesystems are required; NFS/distributed locking is outside scope.
+- Expired tokens renew automatically when possible. Revoked sessions need login
+  again; temporary network failures preserve credentials. Keep credentials and
+  authorization URLs private. Never put GitHub/model tokens in Git URLs or logs.
+- Redirects and environment proxy variables are disabled on internally created
+  HTTP clients; TLS verification stays enabled. Do not enable HTTP wire/debug
+  logging around OAuth, because it can expose secrets.
+
+## Troubleshooting
+
+| Symptom | First check |
+| --- | --- |
+| Ollama connection refused | Verify the server, installed model, and endpoint from this WSL/container; localhost may address the wrong machine |
+| Browser callback fails | Keep login running; check WSL forwarding or Docker host networking and port conflicts |
+| Logged in, inference disabled | Check plan eligibility/permission; use `login --consent` to request permission again |
+| OpenAI model unavailable | Refresh the catalog using the command in [OpenAI setup](#openai--sign-in-with-chatgpt); select a listed model |
+| Explicit-model error during discovery | Prefix the catalog command with `ROSA_LLM_REQUIRE_EXPLICIT_MODEL=false`; keep inference guard enabled afterward |
+| Usage limit or provider unavailable | Review [ChatGPT Usage](https://chatgpt.com/settings/usage); stop or defer requests rather than bypassing limits |
+| Credential permission error | Check user ownership, file mode 600, directory mode 700, and Docker UID 10001 |
+| Stream ends with an error | Record failure even if text was already printed; `generate()` does not return that partial result as completed |
+| Unsupported option/tool/message | Check the [compatibility contract](docs/langchain-compatibility.md); capabilities differ by provider |
+
+## Development and reference
 
 ```bash
-uv run pytest -q
-uv run ruff check .
-uv run ruff format --check .
+uv sync --locked --extra langchain
+uv run --locked pytest -q
+uv run --locked ruff check .
+uv run --locked ruff format --check .
 uv build
 ```
 
-`pytest -q` runs mocked tests with concise output; no live login or inference occurs.
-Tests include signed JWTs, scope/state/nonce validation, rotation, multiprocess
-refresh, storage permissions, provider streams/tool round trips, and CLI JSON.
-Third-party pytest plugin auto-loading is disabled to isolate the suite from
-ROS plugins present in sourced WSL shells. `ruff check` checks Python style and
-common mistakes; `format --check` checks formatting without editing; `uv build`
-creates a wheel and source distribution under `dist/`.
+`pytest -q` runs automated tests with concise output; it does not authorize accounts
+or run live model requests. Third-party pytest plugin auto-loading is disabled.
+Optional ROSA executor checks also need the `integration` group and sourced Jazzy;
+see the [integration guide](docs/langchain-integration.md).
+`ruff check` checks code; `format --check` checks formatting without editing.
+`uv build` creates a wheel and source distribution under `dist/`.
 
-| Symptom | Action |
+| Reference | Contents |
 | --- | --- |
-| Ollama connection refused in WSL | Check its actual host/port; Windows Ollama may need the WSL route gateway rather than localhost. Set `OLLAMA_BASE_URL` explicitly; there is no automatic endpoint switching. |
-| Browser callback fails | Keep login running, check WSL forwarding or Docker host networking, and confirm the selected port is free. Use an existing SSH tunnel if needed. |
-| Identity signed in, inference disabled | Reauthorize with `login --consent`; check account/workspace eligibility and granted plan permission. |
-| Missing OpenAI model | Run `models --provider openai`; clear `OPENAI_MODEL` for catalog selection or use an available slug. |
-| Usage limit/unavailable | Stop new requests and review [ChatGPT Usage](https://chatgpt.com/settings/usage); retry temporary unavailability later. The client does not bypass limits. |
-| Token expired/revoked | Automatic refresh handles expiry; terminal refresh errors require `login` again with the same profile. |
-| Credential permission error | Use a private directory owned by your OS user; files must be mode 600. Docker bind mounts must match UID 10001. |
-| Partial stream followed by failure | Treat the request as failed; `generate()` never returns partial output as completed. |
-| Unsupported feature | The native API supports text/history/function tools and OpenAI custom text tools. The optional LangChain adapter supports text/function tools. Hosted tools, images/files, native async HTTP clients and arbitrary OpenAI parameters are outside scope. |
+| [LangChain / ROSA](docs/langchain-integration.md) | Optional installation, agent examples, ROS environment requirements |
+| [Compatibility](docs/langchain-compatibility.md) | Tool/message contracts, supported interfaces, provider restrictions |
+| [Experiment recording](docs/experiment-recording.md) | Native records, timing definitions, provenance, runner responsibilities |
+| [Python support](docs/python-compatibility.md) | Tested versions, wheel checks, dependency-resolution boundaries |
+| [Protocol](docs/protocol.md) | Official OAuth/protocol sources |
+| [Hardening](docs/hardening-report.md) / [validation](docs/validation.md) | Dated evidence and remaining manual checks |
 
-The OpenAI implementation follows the official protocol, not Codex credentials
-or unofficial ChatGPT endpoints. See [protocol sources](docs/protocol.md) and
-[validation results and remaining manual checks](docs/validation.md).
+<details>
+<summary>Source layout</summary>
+
+| Module | Responsibility |
+| --- | --- |
+| `client.py`, `types.py` | Shared client API and message/tool/response types |
+| `providers.py`, `http.py` | Provider wire formats, stream parsing, safe error classification |
+| `auth.py`, `storage.py` | OAuth, token validation/refresh, protected credential storage |
+| `config.py`, `cli.py` | Configuration precedence and command-line interface |
+| `langchain.py`, `provenance.py` | Optional model adapter and package/source identity |
+
+Runtime dependencies are `httpx`, `python-dotenv`, and `PyJWT[crypto]`.
+Development uses pytest and Ruff; `uv_build` builds the package.
+
+</details>
