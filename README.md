@@ -26,18 +26,20 @@ owns its agent logic, experiment design, and outcome checks.
 For the base client:
 
 ```bash
-uv add "rosa-llm @ git+https://github.com/Lelevinson/rosa-llm-package.git@v0.2.0"
+uv add "rosa-llm==0.2.0"
 ```
 
 For LangChain or ROSA, use this dependency instead:
 
 ```bash
-uv add "rosa-llm[langchain] @ git+https://github.com/Lelevinson/rosa-llm-package.git@v0.2.0"
+uv add "rosa-llm[langchain]==0.2.0"
 ```
 
-`uv add` updates the consuming project's dependencies and lockfile. Public HTTPS
-installation needs no GitHub sign-in. If your project already declares this
-dependency, use its `uv sync --locked`; a separate package clone is unnecessary.
+These commands install the published [PyPI release](https://pypi.org/project/rosa-llm/0.2.0/).
+`uv add` updates the consuming project's dependencies and lockfile; `==0.2.0`
+selects this exact version. No PyPI or GitHub sign-in is required to install it.
+If your project already declares this dependency, use its `uv sync --locked`;
+a separate package clone is unnecessary.
 
 > **Python compatibility:** the base package and adapter require ≥3.11 and have
 > been tested on 3.11 and 3.12 under Linux/WSL x86_64. This checkout and Docker use 3.12.
@@ -48,8 +50,14 @@ dependency, use its `uv sync --locked`; a separate package clone is unnecessary.
 <summary>Pinning a research dependency or keeping a Python ≥3.9 project</summary>
 
 The published v0.2.0 commit is `0b15070f57b9b34790f7fb4c1330a0b19bf69f98`.
-A tag installation records its resolved commit in `uv.lock`; use the full SHA
-in the Git URL when an immutable source reference is required.
+To install directly from Git instead of PyPI, pin this source commit:
+
+```bash
+uv add "rosa-llm[langchain] @ git+https://github.com/Lelevinson/rosa-llm-package.git@0b15070f57b9b34790f7fb4c1330a0b19bf69f98"
+```
+
+The existing `v0.2.0` tag points to the same source. A tag installation records its
+resolved commit in `uv.lock`; the full SHA makes the source reference immutable.
 
 uv checks the consumer's declared Python range, not just its active interpreter.
 For a project that retains ≥3.9 support, a conditional dependency can omit this
